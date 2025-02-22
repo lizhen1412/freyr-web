@@ -1,14 +1,21 @@
 <template>
-  <div>
-    <!-- 输入框，用于用户输入问题 -->
-    <el-input v-model="inputMessage" placeholder="请输入你的问题" @keyup.enter="handleClick"></el-input>
-    <el-button type="primary" @click="handleClick">发送请求</el-button>
-    <!-- 对话框容器 -->
-    <div class="chat-dialog">
-      <!-- 显示用户输入的消息 -->
-      <div v-if="inputMessage" class="user-message">{{ inputMessage }}</div>
-      <!-- 显示 Ollama 的响应消息 -->
-      <div v-if="responseText" class="bot-message">{{ responseText }}</div>
+  <div id="app">
+    <!-- 聊天窗口 -->
+    <el-card class="chat-window">
+      <template #header>
+        <div>聊天对话框</div>
+      </template>
+      <div class="chat-messages">
+        <!-- 显示历史消息 -->
+        <div v-for="(message, index) in chatMessages" :key="index" :class="message.role === 'user' ? 'user-message' : 'bot-message'">
+          {{ message.content }}
+        </div>
+      </div>
+    </el-card>
+    <!-- 输入框和发送按钮 -->
+    <div class="input-container">
+      <el-input v-model="inputMessage" placeholder="请输入你的问题" @keyup.enter="sendMessage"></el-input>
+      <el-button type="primary" @click="sendMessage">发送</el-button>
     </div>
   </div>
 </template>
@@ -17,78 +24,85 @@
 import ollama from 'ollama';
 
 export default {
-  name: 'OllamaTest1',
+  name: 'App',
   data() {
     return {
-      // 用于存储用户输入的消息
       inputMessage: '',
-      // 用于存储 Ollama 的响应消息
-      responseText: ''
+      chatMessages: []
     };
   },
-  computed: {},
   methods: {
-    async handleClick() {
-      if (!this.inputMessage) {
-        return; // 如果输入为空，不发送请求
-      }
+    async sendMessage() {
+      if (!this.inputMessage) return;
+      // 添加用户消息到聊天记录
+      const userMessage = { role: 'user', content: this.inputMessage };
+      this.chatMessages.push(userMessage);
       try {
-        const message = { role: 'user', content: this.inputMessage };
-        const response = await ollama.chat({ model: 'llama3.1:8b', messages: [message], stream: true });
+        const response = await ollama.chat({
+          model: 'llama3.1:8b',
+          messages: [userMessage],
+          stream: true
+        });
         let fullResponse = '';
         for await (const part of response) {
           fullResponse += part.message.content;
-          this.responseText = fullResponse;
         }
+        // 添加机器人回复到聊天记录
+        const botMessage = { role: 'bot', content: fullResponse };
+        this.chatMessages.push(botMessage);
       } catch (error) {
         console.error('请求出错:', error);
-        this.responseText = '请求出错，请稍后重试';
+        const errorMessage = { role: 'bot', content: '请求出错，请稍后重试' };
+        this.chatMessages.push(errorMessage);
       }
+      // 清空输入框
+      this.inputMessage = '';
     }
-  },
-  created() {},
-  beforeMount() {},
-  mounted() {},
-  beforeUpdate() {},
-  updated() {},
-  beforeUnmount() {},
-  unmounted() {},
-  activated() {},
-  deactivated() {},
-  errorCaptured(err, instance, info) {
-    return false;
-  },
-  renderTracked(event) {},
-  renderTriggered(event) {}
+  }
 };
 </script>
 
 <style scoped>
-/* 对话框容器样式 */
-.chat-dialog {
-  margin-top: 20px;
-  border: 1px solid #ccc;
-  padding: 10px;
-  border-radius: 4px;
-  max-height: 300px;
-  overflow-y: auto;
+.chat-window {
+  height: 400px;
+  margin-bottom: 20px;
 }
 
-/* 用户消息样式 */
+.chat-messages {
+  height: 330px;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
 .user-message {
   background-color: #e1f5fe;
   padding: 8px;
   border-radius: 4px;
   margin-bottom: 10px;
-  align-self: flex-start;
+  align-self: flex-end;
+  max-width: 70%;
+  word-wrap: break-word;
 }
 
-/* 机器人消息样式 */
 .bot-message {
   background-color: #f1f8e9;
   padding: 8px;
   border-radius: 4px;
   margin-bottom: 10px;
-  align-self: flex-end;
+  align-self: flex-start;
+  max-width: 70%;
+  word-wrap: break-word;
+}
+
+.input-container {
+  display: flex;
+  align-items: center;
+}
+
+.input-container el-input {
+  flex: 1;
+  margin-right: 10px;
 }
 </style>
