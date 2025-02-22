@@ -7,7 +7,8 @@
       </template>
       <div class="chat-messages">
         <!-- 显示历史消息 -->
-        <div v-for="(message, index) in chatMessages" :key="index" :class="message.role === 'user' ? 'user-message' : 'bot-message'">
+        <div v-for="(message, index) in chatMessages" :key="index"
+          :class="message.role === 'user' ? 'user-message' : 'bot-message'">
           {{ message.content }}
         </div>
       </div>
@@ -32,30 +33,46 @@ export default {
     };
   },
   methods: {
+    /**
+      * 异步发送消息函数
+      * 此函数负责将用户输入的消息发送到聊天记录中，并接收机器人的回复
+      * 如果用户输入的消息为空，则不执行任何操作
+    */
     async sendMessage() {
+      // 检查用户输入的消息是否为空
       if (!this.inputMessage) return;
+
       // 添加用户消息到聊天记录
       const userMessage = { role: 'user', content: this.inputMessage };
+      // 将用户消息添加到聊天消息列表中
       this.chatMessages.push(userMessage);
+
       try {
+        // 调用API与模型进行聊天，传入用户消息并设置流式响应
         const response = await ollama.chat({
           model: 'llama3.1:8b',
           messages: [userMessage],
           stream: true
         });
+
+        // 初始化一个空字符串变量fullResponse，用于后续存储完整的响应内容
         let fullResponse = '';
+        // 逐段接收并累积模型的回复
         for await (const part of response) {
           fullResponse += part.message.content;
         }
+
         // 添加机器人回复到聊天记录
         const botMessage = { role: 'bot', content: fullResponse };
         this.chatMessages.push(botMessage);
       } catch (error) {
+        // 处理请求错误，并向用户显示错误信息
         console.error('请求出错:', error);
         const errorMessage = { role: 'bot', content: '请求出错，请稍后重试' };
         this.chatMessages.push(errorMessage);
       }
-      // 清空输入框
+
+      // 清空输入框，准备下一次输入
       this.inputMessage = '';
     }
   }
