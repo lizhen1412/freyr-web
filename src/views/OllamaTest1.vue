@@ -17,6 +17,7 @@
     <div class="input-container">
       <el-input v-model="inputMessage" placeholder="请输入你的问题" @keyup.enter="sendMessage"></el-input>
       <el-button type="primary" @click="sendMessage">发送</el-button>
+      <el-button type="primary" @click="showModel">获取模型</el-button>
     </div>
   </div>
 </template>
@@ -74,6 +75,22 @@ export default {
 
       // 清空输入框，准备下一次输入
       this.inputMessage = '';
+    },
+    // 展示模型
+    async showModel() {
+      // 显示模型
+      console.log('显示模型');
+      // 构建 ShowRequest 对象
+      const showRequest = {
+          model: 'llama3.1:8b' // 这里指定要显示信息的模型名称
+        };
+
+       // 调用 ollama 的 show 方法获取模型信息
+       const response = await ollama.show(showRequest);
+       console.log(response);
+        // 将响应对象转换为 JSON 字符串并打印
+      const jsonResponse = JSON.stringify(response, null, 2);
+      console.log(jsonResponse);
     }
   }
 };
