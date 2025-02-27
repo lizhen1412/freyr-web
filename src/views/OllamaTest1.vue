@@ -16,26 +16,18 @@
       <template #header>
         <div class="card-header">
           <span>聊天对话框</span>
-          <!-- 清除消息按钮：添加确认提示 -->
-          <el-button 
-            type="danger" 
-            size="small" 
-            @click="confirmClearMessages"
-            :disabled="chatMessages.length === 0">
-            清除消息
-          </el-button>
+          <!-- 查看模型信息按钮 -->
+          <el-button type="primary" @click="showModel">获取模型</el-button>
         </div>
       </template>
-      <!-- 消息显示区域：包含所有历史消息 -->
-      <div class="chat-messages" ref="chatContainer">
-        <!-- 
-          使用 v-for 循环渲染消息列表
-          根据消息角色（user/bot）应用不同的样式
-        -->
-        <div v-for="(message, index) in chatMessages" :key="index"
+      <!-- 使用 el-scrollbar 替换虚拟列表 -->
+      <el-scrollbar class="chat-messages" ref="chatContainer" always>
+        <div
+          v-for="message in chatMessages"
+          :key="message.id"
           class="message-wrapper"
-          :class="message.role === 'user' ? 'message-wrapper-right' : 'message-wrapper-left'">
-          <!-- 头像：使用 Element Plus 的 Avatar 组件 -->
+          :class="message.role === 'user' ? 'message-wrapper-right' : 'message-wrapper-left'"
+        >
           <el-avatar
             :class="message.role === 'user' ? 'user-avatar' : 'bot-avatar'"
             :size="40"
@@ -47,14 +39,13 @@
               <ChatDotRound />
             </el-icon>
           </el-avatar>
-          <!-- 消息气泡 -->
           <div class="message-bubble" :class="message.role === 'user' ? 'user-message' : 'bot-message'">
             <div class="message-content">
               {{ message.content }}
             </div>
           </div>
         </div>
-      </div>
+      </el-scrollbar>
     </el-card>
     <!-- 底部输入区域：包含输入框和操作按钮 -->
     <div class="input-container">
@@ -65,8 +56,14 @@
       <el-input v-model="inputMessage" placeholder="请输入你的问题" @keyup.enter="sendMessage"></el-input>
       <!-- 发送按钮 -->
       <el-button type="primary" @click="sendMessage">发送</el-button>
-      <!-- 查看模型信息按钮 -->
-      <el-button type="primary" @click="showModel">获取模型</el-button>
+      <!-- 清除消息按钮：添加确认提示 -->
+      <el-button 
+        type="danger" 
+        size="small" 
+        @click="confirmClearMessages"
+        :disabled="chatMessages.length === 0">
+        清除消息
+      </el-button>
     </div>
 
     <!-- 模型信息对话框 -->
@@ -75,73 +72,84 @@
       title="模型信息"
       width="70%"
       :close-on-click-modal="false"
+      class="model-info-dialog"
     >
       <div v-if="modelInfo" class="model-info">
         <el-tabs>
           <!-- 基本信息 -->
           <el-tab-pane label="基本信息">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="模型名称">{{ modelInfo.details?.basename || 'llama3.1:8b' }}</el-descriptions-item>
-              <el-descriptions-item label="修改时间">
-                <el-tooltip
-                  :content="formatDateTime(modelInfo.modified_at, true)"
-                  placement="top"
-                >
-                  <span>{{ formatDateTime(modelInfo.modified_at) }}</span>
-                </el-tooltip>
-              </el-descriptions-item>
-              <el-descriptions-item label="参数大小">{{ modelInfo.details.parameter_size }}</el-descriptions-item>
-              <el-descriptions-item label="量化级别">{{ modelInfo.details.quantization_level }}</el-descriptions-item>
-              <el-descriptions-item label="模型系列">{{ modelInfo.details.family }}</el-descriptions-item>
-              <el-descriptions-item label="格式">{{ modelInfo.details.format }}</el-descriptions-item>
-            </el-descriptions>
+            <el-scrollbar height="400px" always>
+              <div class="tab-content">
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="模型名称">{{ modelInfo.details?.basename || 'llama3.1:8b' }}</el-descriptions-item>
+                  <el-descriptions-item label="修改时间">
+                    <el-tooltip
+                      :content="formatDateTime(modelInfo.modified_at, true)"
+                      placement="top"
+                    >
+                      <span>{{ formatDateTime(modelInfo.modified_at) }}</span>
+                    </el-tooltip>
+                  </el-descriptions-item>
+                  <el-descriptions-item label="参数大小">{{ modelInfo.details.parameter_size }}</el-descriptions-item>
+                  <el-descriptions-item label="量化级别">{{ modelInfo.details.quantization_level }}</el-descriptions-item>
+                  <el-descriptions-item label="模型系列">{{ modelInfo.details.family }}</el-descriptions-item>
+                  <el-descriptions-item label="格式">{{ modelInfo.details.format }}</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </el-scrollbar>
           </el-tab-pane>
 
           <!-- 详细信息 -->
           <el-tab-pane label="详细信息">
-            <el-collapse v-model="activeCollapseNames">
-              <!-- 基础信息 -->
-              <el-collapse-item title="基础信息" name="1">
-                <el-descriptions :column="2" border>
-                  <el-descriptions-item label="架构">{{ modelInfo.model_info['general.architecture'] }}</el-descriptions-item>
-                  <el-descriptions-item label="基础名称">{{ modelInfo.model_info['general.basename'] }}</el-descriptions-item>
-                  <el-descriptions-item label="文件类型">{{ modelInfo.model_info['general.file_type'] }}</el-descriptions-item>
-                  <el-descriptions-item label="微调类型">{{ modelInfo.model_info['general.finetune'] }}</el-descriptions-item>
-                  <el-descriptions-item label="支持语言">{{ modelInfo.model_info['general.languages'].join(', ') }}</el-descriptions-item>
-                  <el-descriptions-item label="标签">{{ modelInfo.model_info['general.tags'].join(', ') }}</el-descriptions-item>
-                </el-descriptions>
-              </el-collapse-item>
+            <el-scrollbar height="400px" always>
+              <div class="tab-content">
+                <el-collapse v-model="activeCollapseNames">
+                  <!-- 基础信息 -->
+                  <el-collapse-item title="基础信息" name="1">
+                    <el-descriptions :column="2" border>
+                      <el-descriptions-item label="架构">{{ modelInfo.model_info['general.architecture'] }}</el-descriptions-item>
+                      <el-descriptions-item label="基础名称">{{ modelInfo.model_info['general.basename'] }}</el-descriptions-item>
+                      <el-descriptions-item label="文件类型">{{ modelInfo.model_info['general.file_type'] }}</el-descriptions-item>
+                      <el-descriptions-item label="微调类型">{{ modelInfo.model_info['general.finetune'] }}</el-descriptions-item>
+                      <el-descriptions-item label="支持语言">{{ modelInfo.model_info['general.languages'].join(', ') }}</el-descriptions-item>
+                      <el-descriptions-item label="标签">{{ modelInfo.model_info['general.tags'].join(', ') }}</el-descriptions-item>
+                    </el-descriptions>
+                  </el-collapse-item>
 
-              <!-- 模型参数 -->
-              <el-collapse-item title="模型参数" name="2">
-                <el-descriptions :column="2" border>
-                  <el-descriptions-item label="注意力头数">{{ modelInfo.model_info['llama.attention.head_count'] }}</el-descriptions-item>
-                  <el-descriptions-item label="KV注意力头数">{{ modelInfo.model_info['llama.attention.head_count_kv'] }}</el-descriptions-item>
-                  <el-descriptions-item label="层数">{{ modelInfo.model_info['llama.block_count'] }}</el-descriptions-item>
-                  <el-descriptions-item label="上下文长度">{{ modelInfo.model_info['llama.context_length'] }}</el-descriptions-item>
-                  <el-descriptions-item label="嵌入维度">{{ modelInfo.model_info['llama.embedding_length'] }}</el-descriptions-item>
-                  <el-descriptions-item label="前馈网络维度">{{ modelInfo.model_info['llama.feed_forward_length'] }}</el-descriptions-item>
-                  <el-descriptions-item label="词表大小">{{ modelInfo.model_info['llama.vocab_size'] }}</el-descriptions-item>
-                </el-descriptions>
-              </el-collapse-item>
+                  <!-- 模型参数 -->
+                  <el-collapse-item title="模型参数" name="2">
+                    <el-descriptions :column="2" border>
+                      <el-descriptions-item label="注意力头数">{{ modelInfo.model_info['llama.attention.head_count'] }}</el-descriptions-item>
+                      <el-descriptions-item label="KV注意力头数">{{ modelInfo.model_info['llama.attention.head_count_kv'] }}</el-descriptions-item>
+                      <el-descriptions-item label="层数">{{ modelInfo.model_info['llama.block_count'] }}</el-descriptions-item>
+                      <el-descriptions-item label="上下文长度">{{ modelInfo.model_info['llama.context_length'] }}</el-descriptions-item>
+                      <el-descriptions-item label="嵌入维度">{{ modelInfo.model_info['llama.embedding_length'] }}</el-descriptions-item>
+                      <el-descriptions-item label="前馈网络维度">{{ modelInfo.model_info['llama.feed_forward_length'] }}</el-descriptions-item>
+                      <el-descriptions-item label="词表大小">{{ modelInfo.model_info['llama.vocab_size'] }}</el-descriptions-item>
+                    </el-descriptions>
+                  </el-collapse-item>
 
-              <!-- 分词器信息 -->
-              <el-collapse-item title="分词器信息" name="3">
-                <el-descriptions :column="2" border>
-                  <el-descriptions-item label="BOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.bos_token_id'] }}</el-descriptions-item>
-                  <el-descriptions-item label="EOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.eos_token_id'] }}</el-descriptions-item>
-                  <el-descriptions-item label="分词器模型">{{ modelInfo.model_info['tokenizer.ggml.model'] }}</el-descriptions-item>
-                  <el-descriptions-item label="分词器前缀">{{ modelInfo.model_info['tokenizer.ggml.pre'] }}</el-descriptions-item>
-                </el-descriptions>
-              </el-collapse-item>
-            </el-collapse>
+                  <!-- 分词器信息 -->
+                  <el-collapse-item title="分词器信息" name="3">
+                    <el-descriptions :column="2" border>
+                      <el-descriptions-item label="BOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.bos_token_id'] }}</el-descriptions-item>
+                      <el-descriptions-item label="EOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.eos_token_id'] }}</el-descriptions-item>
+                      <el-descriptions-item label="分词器模型">{{ modelInfo.model_info['tokenizer.ggml.model'] }}</el-descriptions-item>
+                      <el-descriptions-item label="分词器前缀">{{ modelInfo.model_info['tokenizer.ggml.pre'] }}</el-descriptions-item>
+                    </el-descriptions>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
+            </el-scrollbar>
           </el-tab-pane>
 
           <!-- 许可证信息 -->
           <el-tab-pane label="许可证">
-            <div class="license-content">
-              <pre>{{ modelInfo.license }}</pre>
-            </div>
+            <el-scrollbar height="400px" always>
+              <div class="tab-content license-content">
+                <pre>{{ modelInfo.license }}</pre>
+              </div>
+            </el-scrollbar>
           </el-tab-pane>
         </el-tabs>
       </div>
@@ -161,7 +169,7 @@ import { Female, ChatDotRound } from '@element-plus/icons-vue'
 
 export default {
   name: 'App',
-  // 注册图标组件
+  // 注册组件
   components: {
     Female,
     ChatDotRound
@@ -169,6 +177,7 @@ export default {
   // 组件数据定义
   data() {
     return {
+      messageIdCounter: 0, // 用于生成消息的唯一ID
       // 存储用户当前输入的消息
       inputMessage: '',
       // 存储所有的聊天记录，包括用户消息和机器人回复
@@ -201,10 +210,13 @@ export default {
      * 功能：将聊天区域滚动到最新消息处
      */
     scrollToBottom() {
-      const container = this.$refs.chatContainer;
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
+      this.$nextTick(() => {
+        const scrollbar = this.$refs.chatContainer;
+        if (scrollbar) {
+          // 使用 Element Plus scrollbar 的方法设置滚动位置
+          scrollbar.setScrollTop(scrollbar.wrapRef.scrollHeight);
+        }
+      });
     },
 
     /**
@@ -224,7 +236,11 @@ export default {
       this.inputMessage = '';
 
       // 创建用户消息对象
-      const userMessage = { role: 'user', content: currentMessage };
+      const userMessage = { 
+        id: ++this.messageIdCounter, // 添加唯一ID
+        role: 'user', 
+        content: currentMessage 
+      };
       // 将用户消息添加到聊天记录
       this.chatMessages.push(userMessage);
 
@@ -248,12 +264,20 @@ export default {
         }
 
         // 创建并添加机器人回复到聊天记录
-        const botMessage = { role: 'bot', content: fullResponse };
+        const botMessage = { 
+          id: ++this.messageIdCounter, // 添加唯一ID
+          role: 'bot', 
+          content: fullResponse 
+        };
         this.chatMessages.push(botMessage);
       } catch (error) {
         // 错误处理：记录错误并向用户显示错误提示
         console.error('请求出错:', error);
-        const errorMessage = { role: 'bot', content: '请求出错，请稍后重试' };
+        const errorMessage = { 
+          id: ++this.messageIdCounter, // 添加唯一ID
+          role: 'bot', 
+          content: '请求出错，请稍后重试' 
+        };
         this.chatMessages.push(errorMessage);
       }
     },
@@ -355,13 +379,11 @@ export default {
   background-color: #f5f5f5; /* 聊天背景色 */
 }
 
-/* 消息显示区域样式 */
+/* 聊天消息容器样式 */
 .chat-messages {
   height: 330px;
-  overflow-y: auto; /* 允许垂直滚动 */
   padding: 16px;
-  display: flex;
-  flex-direction: column;
+  background-color: #f5f5f5;
 }
 
 /* 消息包装器样式 */
@@ -461,14 +483,59 @@ export default {
   background-color: white;
 }
 
-/* 模型信息样式 */
+/* 模型信息对话框样式 */
+:deep(.model-info-dialog .el-dialog__body) {
+  padding: 0 20px 20px;
+}
+
+/* 模型信息内容样式 */
 .model-info {
   padding: 10px;
 }
 
-.model-info-loading {
-  padding: 40px 0;
-  text-align: center;
+.tab-content {
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+}
+
+/* 许可证内容样式 */
+.license-content {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.license-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: monospace;
+  padding: 16px;
+}
+
+/* 自定义滚动条样式 */
+:deep(.el-scrollbar__bar) {
+  opacity: 0.3;
+  z-index: 100;
+}
+
+:deep(.el-scrollbar__bar:hover) {
+  opacity: 0.5;
+}
+
+/* 标签页样式优化 */
+:deep(.el-tabs__content) {
+  overflow: visible;
+}
+
+/* 折叠面板样式优化 */
+:deep(.el-collapse-item__content) {
+  padding: 20px 0;
+}
+
+:deep(.el-collapse-item__header) {
+  font-size: 16px;
+  font-weight: bold;
 }
 
 /* 描述列表样式优化 */
@@ -479,36 +546,5 @@ export default {
 
 :deep(.el-descriptions__content) {
   word-break: break-word;
-}
-
-/* 许可证内容样式 */
-.license-content {
-  max-height: 400px;
-  overflow-y: auto;
-  background-color: #f5f5f5;
-  padding: 16px;
-  border-radius: 4px;
-}
-
-.license-content pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin: 0;
-  font-family: monospace;
-}
-
-/* 标签页样式优化 */
-:deep(.el-tabs__content) {
-  padding: 20px 0;
-}
-
-/* 折叠面板样式优化 */
-:deep(.el-collapse-item__content) {
-  padding: 20px;
-}
-
-:deep(.el-collapse-item__header) {
-  font-size: 16px;
-  font-weight: bold;
 }
 </style>
