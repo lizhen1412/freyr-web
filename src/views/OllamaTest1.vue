@@ -1,142 +1,514 @@
+<!-- 
+  OllamaTest1.vue
+  这是一个基于 Vue 的聊天界面组件，用于与 Ollama AI 模型进行对话
+  主要功能：
+  1. 提供聊天界面，包括消息显示区域和输入区域
+  2. 支持发送消息给 AI 模型并接收回复
+  3. 支持查看模型信息
+  4. 支持清除所有聊天记录
+-->
 <template>
+  <!-- 主容器 -->
   <div id="app">
-    <!-- 聊天窗口 -->
+    <!-- 聊天窗口：使用 Element Plus 的 Card 组件 -->
     <el-card class="chat-window">
+      <!-- 卡片头部：显示标题和清除按钮 -->
       <template #header>
-        <div>聊天对话框</div>
+        <div class="card-header">
+          <span>聊天对话框</span>
+          <!-- 清除消息按钮：添加确认提示 -->
+          <el-button 
+            type="danger" 
+            size="small" 
+            @click="confirmClearMessages"
+            :disabled="chatMessages.length === 0">
+            清除消息
+          </el-button>
+        </div>
       </template>
-      <div class="chat-messages">
-        <!-- 显示历史消息 -->
+      <!-- 消息显示区域：包含所有历史消息 -->
+      <div class="chat-messages" ref="chatContainer">
+        <!-- 
+          使用 v-for 循环渲染消息列表
+          根据消息角色（user/bot）应用不同的样式
+        -->
         <div v-for="(message, index) in chatMessages" :key="index"
-          :class="message.role === 'user' ? 'user-message' : 'bot-message'">
-          {{ message.content }}
+          class="message-wrapper"
+          :class="message.role === 'user' ? 'message-wrapper-right' : 'message-wrapper-left'">
+          <!-- 头像：使用 Element Plus 的 Avatar 组件 -->
+          <el-avatar
+            :class="message.role === 'user' ? 'user-avatar' : 'bot-avatar'"
+            :size="40"
+          >
+            <el-icon v-if="message.role === 'user'">
+              <Female />
+            </el-icon>
+            <el-icon v-else>
+              <ChatDotRound />
+            </el-icon>
+          </el-avatar>
+          <!-- 消息气泡 -->
+          <div class="message-bubble" :class="message.role === 'user' ? 'user-message' : 'bot-message'">
+            <div class="message-content">
+              {{ message.content }}
+            </div>
+          </div>
         </div>
       </div>
     </el-card>
-    <!-- 输入框和发送按钮 -->
+    <!-- 底部输入区域：包含输入框和操作按钮 -->
     <div class="input-container">
+      <!-- 
+        输入框：支持回车发送
+        v-model 用于双向数据绑定
+      -->
       <el-input v-model="inputMessage" placeholder="请输入你的问题" @keyup.enter="sendMessage"></el-input>
+      <!-- 发送按钮 -->
       <el-button type="primary" @click="sendMessage">发送</el-button>
+      <!-- 查看模型信息按钮 -->
       <el-button type="primary" @click="showModel">获取模型</el-button>
     </div>
+
+    <!-- 模型信息对话框 -->
+    <el-dialog
+      v-model="modelDialogVisible"
+      title="模型信息"
+      width="70%"
+      :close-on-click-modal="false"
+    >
+      <div v-if="modelInfo" class="model-info">
+        <el-tabs>
+          <!-- 基本信息 -->
+          <el-tab-pane label="基本信息">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="模型名称">{{ modelInfo.details?.basename || 'llama3.1:8b' }}</el-descriptions-item>
+              <el-descriptions-item label="修改时间">
+                <el-tooltip
+                  :content="formatDateTime(modelInfo.modified_at, true)"
+                  placement="top"
+                >
+                  <span>{{ formatDateTime(modelInfo.modified_at) }}</span>
+                </el-tooltip>
+              </el-descriptions-item>
+              <el-descriptions-item label="参数大小">{{ modelInfo.details.parameter_size }}</el-descriptions-item>
+              <el-descriptions-item label="量化级别">{{ modelInfo.details.quantization_level }}</el-descriptions-item>
+              <el-descriptions-item label="模型系列">{{ modelInfo.details.family }}</el-descriptions-item>
+              <el-descriptions-item label="格式">{{ modelInfo.details.format }}</el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+
+          <!-- 详细信息 -->
+          <el-tab-pane label="详细信息">
+            <el-collapse v-model="activeCollapseNames">
+              <!-- 基础信息 -->
+              <el-collapse-item title="基础信息" name="1">
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="架构">{{ modelInfo.model_info['general.architecture'] }}</el-descriptions-item>
+                  <el-descriptions-item label="基础名称">{{ modelInfo.model_info['general.basename'] }}</el-descriptions-item>
+                  <el-descriptions-item label="文件类型">{{ modelInfo.model_info['general.file_type'] }}</el-descriptions-item>
+                  <el-descriptions-item label="微调类型">{{ modelInfo.model_info['general.finetune'] }}</el-descriptions-item>
+                  <el-descriptions-item label="支持语言">{{ modelInfo.model_info['general.languages'].join(', ') }}</el-descriptions-item>
+                  <el-descriptions-item label="标签">{{ modelInfo.model_info['general.tags'].join(', ') }}</el-descriptions-item>
+                </el-descriptions>
+              </el-collapse-item>
+
+              <!-- 模型参数 -->
+              <el-collapse-item title="模型参数" name="2">
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="注意力头数">{{ modelInfo.model_info['llama.attention.head_count'] }}</el-descriptions-item>
+                  <el-descriptions-item label="KV注意力头数">{{ modelInfo.model_info['llama.attention.head_count_kv'] }}</el-descriptions-item>
+                  <el-descriptions-item label="层数">{{ modelInfo.model_info['llama.block_count'] }}</el-descriptions-item>
+                  <el-descriptions-item label="上下文长度">{{ modelInfo.model_info['llama.context_length'] }}</el-descriptions-item>
+                  <el-descriptions-item label="嵌入维度">{{ modelInfo.model_info['llama.embedding_length'] }}</el-descriptions-item>
+                  <el-descriptions-item label="前馈网络维度">{{ modelInfo.model_info['llama.feed_forward_length'] }}</el-descriptions-item>
+                  <el-descriptions-item label="词表大小">{{ modelInfo.model_info['llama.vocab_size'] }}</el-descriptions-item>
+                </el-descriptions>
+              </el-collapse-item>
+
+              <!-- 分词器信息 -->
+              <el-collapse-item title="分词器信息" name="3">
+                <el-descriptions :column="2" border>
+                  <el-descriptions-item label="BOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.bos_token_id'] }}</el-descriptions-item>
+                  <el-descriptions-item label="EOS Token ID">{{ modelInfo.model_info['tokenizer.ggml.eos_token_id'] }}</el-descriptions-item>
+                  <el-descriptions-item label="分词器模型">{{ modelInfo.model_info['tokenizer.ggml.model'] }}</el-descriptions-item>
+                  <el-descriptions-item label="分词器前缀">{{ modelInfo.model_info['tokenizer.ggml.pre'] }}</el-descriptions-item>
+                </el-descriptions>
+              </el-collapse-item>
+            </el-collapse>
+          </el-tab-pane>
+
+          <!-- 许可证信息 -->
+          <el-tab-pane label="许可证">
+            <div class="license-content">
+              <pre>{{ modelInfo.license }}</pre>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <div v-else class="model-info-loading">
+        <el-empty v-if="modelInfoError" :description="modelInfoError" />
+        <el-empty v-else description="正在加载模型信息..." />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+// 导入 ollama 库，用于与 AI 模型通信
 import ollama from 'ollama';
+// 导入 Element Plus 图标
+import { Female, ChatDotRound } from '@element-plus/icons-vue'
 
 export default {
   name: 'App',
+  // 注册图标组件
+  components: {
+    Female,
+    ChatDotRound
+  },
+  // 组件数据定义
   data() {
     return {
+      // 存储用户当前输入的消息
       inputMessage: '',
-      chatMessages: []
+      // 存储所有的聊天记录，包括用户消息和机器人回复
+      chatMessages: [],
+      // 模型信息对话框显示状态
+      modelDialogVisible: false,
+      // 存储模型信息
+      modelInfo: null,
+      // 存储模型信息加载错误
+      modelInfoError: null,
+      // 折叠面板展开的项
+      activeCollapseNames: ['1', '2', '3']
     };
+  },
+  // 监听聊天消息的变化
+  watch: {
+    // 监听聊天消息数组的变化，当有新消息时自动滚动
+    chatMessages: {
+      handler() {
+        this.$nextTick(() => {
+          this.scrollToBottom();
+        });
+      },
+      deep: true
+    }
   },
   methods: {
     /**
-      * 异步发送消息函数
-      * 此函数负责将用户输入的消息发送到聊天记录中，并接收机器人的回复
-      * 如果用户输入的消息为空，则不执行任何操作
-    */
+     * 滚动到底部方法
+     * 功能：将聊天区域滚动到最新消息处
+     */
+    scrollToBottom() {
+      const container = this.$refs.chatContainer;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    },
+
+    /**
+     * 发送消息方法
+     * 功能：
+     * 1. 发送用户消息到 AI 模型
+     * 2. 接收并处理 AI 模型的回复
+     * 3. 更新聊天界面
+     */
     async sendMessage() {
-      // 检查用户输入的消息是否为空
+      // 检查消息是否为空
       if (!this.inputMessage) return;
 
-      // 添加用户消息到聊天记录
-      const userMessage = { role: 'user', content: this.inputMessage };
-      // 将用户消息添加到聊天消息列表中
+      // 保存当前输入的消息
+      const currentMessage = this.inputMessage;
+      // 立即清空输入框，提升用户体验
+      this.inputMessage = '';
+
+      // 创建用户消息对象
+      const userMessage = { role: 'user', content: currentMessage };
+      // 将用户消息添加到聊天记录
       this.chatMessages.push(userMessage);
 
       try {
-        // 调用API与模型进行聊天，传入用户消息并设置流式响应
+        // 调用 Ollama API 发送请求
+        // model: 指定使用的 AI 模型
+        // messages: 发送的消息内容
+        // stream: 启用流式响应，实现实时返回
         const response = await ollama.chat({
           model: 'llama3.1:8b',
           messages: [userMessage],
           stream: true
         });
 
-        // 初始化一个空字符串变量fullResponse，用于后续存储完整的响应内容
+        // 用于存储完整的 AI 回复
         let fullResponse = '';
-        // 逐段接收并累积模型的回复
+        // 通过 for await 循环处理流式响应
+        // 将每个部分的回复累加到完整回复中
         for await (const part of response) {
           fullResponse += part.message.content;
         }
 
-        // 添加机器人回复到聊天记录
+        // 创建并添加机器人回复到聊天记录
         const botMessage = { role: 'bot', content: fullResponse };
         this.chatMessages.push(botMessage);
       } catch (error) {
-        // 处理请求错误，并向用户显示错误信息
+        // 错误处理：记录错误并向用户显示错误提示
         console.error('请求出错:', error);
         const errorMessage = { role: 'bot', content: '请求出错，请稍后重试' };
         this.chatMessages.push(errorMessage);
       }
-
-      // 清空输入框，准备下一次输入
-      this.inputMessage = '';
     },
-    // 展示模型
+
+    /**
+     * 显示模型信息方法
+     * 功能：获取并显示当前 AI 模型的详细信息
+     */
     async showModel() {
-      // 显示模型
-      console.log('显示模型');
-      // 构建 ShowRequest 对象
-      const showRequest = {
-          model: 'llama3.1:8b' // 这里指定要显示信息的模型名称
+      // 显示对话框
+      this.modelDialogVisible = true;
+      // 重置状态
+      this.modelInfo = null;
+      this.modelInfoError = null;
+
+      try {
+        // 创建请求对象，指定要查询的模型
+        const showRequest = {
+          model: 'llama3.1:8b'
         };
 
-       // 调用 ollama 的 show 方法获取模型信息
-       const response = await ollama.show(showRequest);
-       console.log(response);
-        // 将响应对象转换为 JSON 字符串并打印
-      const jsonResponse = JSON.stringify(response, null, 2);
-      console.log(jsonResponse);
+        // 调用 API 获取模型信息
+        const response = await ollama.show(showRequest);
+        // 保存模型信息
+        this.modelInfo = response;
+      } catch (error) {
+        console.error('获取模型信息失败:', error);
+        this.modelInfoError = '获取模型信息失败，请稍后重试';
+      }
+    },
+
+    /**
+     * 确认清除消息
+     * 功能：弹出确认对话框，询问用户是否确认清除所有聊天记录
+     */
+    confirmClearMessages() {
+      // 使用 Element Plus 的确认对话框
+      this.$confirm('确认要清除所有聊天记录吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+        .then(() => {
+          this.clearMessages();
+          // 显示清除成功的提示
+          this.$message({
+            type: 'success',
+            message: '聊天记录已清除'
+          });
+        })
+        .catch(() => {
+          // 用户取消清除操作，显示取消提示
+          this.$message({
+            type: 'info',
+            message: '已取消清除操作'
+          });
+        });
+    },
+
+    /**
+     * 清除消息方法
+     * 功能：清除所有聊天记录
+     */
+    clearMessages() {
+      this.chatMessages = [];
+    },
+
+    /**
+     * 格式化日期时间
+     * @param {string} dateString - ISO格式的日期字符串
+     * @param {boolean} showDetail - 是否显示详细时间
+     * @returns {string} 格式化后的日期时间字符串
+     */
+    formatDateTime(dateString, showDetail = false) {
+      if (!dateString) return '暂无数据';
+      
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      if (showDetail) {
+        return `${year}年${month}月${day}日 ${hours}:${minutes}:${seconds}`;
+      }
+      return `${year}年${month}月${day}日`;
     }
   }
 };
 </script>
 
 <style scoped>
+/* 聊天窗口样式 */
 .chat-window {
-  height: 400px;
+  height: 400px; /* 固定高度 */
   margin-bottom: 20px;
+  background-color: #f5f5f5; /* 聊天背景色 */
 }
 
+/* 消息显示区域样式 */
 .chat-messages {
   height: 330px;
-  overflow-y: auto;
-  padding: 10px;
+  overflow-y: auto; /* 允许垂直滚动 */
+  padding: 16px;
   display: flex;
   flex-direction: column;
 }
 
+/* 消息包装器样式 */
+.message-wrapper {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+/* 右侧（用户）消息包装器 */
+.message-wrapper-right {
+  flex-direction: row-reverse;
+}
+
+/* 头像：使用 Element Plus 的 Avatar 组件 */
+.avatar {
+  display: none;
+}
+
+/* 用户头像样式 */
+.user-avatar {
+  background-color: #1890ff !important;
+  margin-left: 12px;
+  color: white !important;
+}
+
+/* 机器人头像样式 */
+.bot-avatar {
+  background-color: #52c41a !important;
+  margin-right: 12px;
+  color: white !important;
+}
+
+/* 头像图标样式 */
+.el-icon {
+  font-size: 20px;
+}
+
+/* 消息气泡基础样式 */
+.message-bubble {
+  padding: 10px 16px;
+  border-radius: 16px;
+  position: relative;
+  max-width: calc(70% - 50px);
+  word-wrap: break-word;
+}
+
+/* 用户消息气泡样式 */
 .user-message {
-  background-color: #e1f5fe;
-  padding: 8px;
-  border-radius: 4px;
-  margin-bottom: 10px;
-  align-self: flex-end;
-  max-width: 70%;
-  word-wrap: break-word;
+  background-color: #1890ff;
+  color: white;
+  border-top-right-radius: 4px;
 }
 
+/* 机器人消息气泡样式 */
 .bot-message {
-  background-color: #f1f8e9;
-  padding: 8px;
-  border-radius: 4px;
-  margin-bottom: 10px;
-  align-self: flex-start;
-  max-width: 70%;
-  word-wrap: break-word;
+  background-color: white;
+  color: #333;
+  border-top-left-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
+/* 消息内容样式 */
+.message-content {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 输入区域容器样式 */
 .input-container {
   display: flex;
   align-items: center;
+  background-color: white;
+  padding: 12px;
+  border-top: 1px solid #e8e8e8;
 }
 
+/* 输入框样式 */
 .input-container el-input {
   flex: 1;
-  margin-right: 10px;
+  margin-right: 12px;
+}
+
+/* 按钮样式优化 */
+.el-button {
+  margin-left: 8px;
+}
+
+/* 卡片头部样式 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8e8e8;
+  background-color: white;
+}
+
+/* 模型信息样式 */
+.model-info {
+  padding: 10px;
+}
+
+.model-info-loading {
+  padding: 40px 0;
+  text-align: center;
+}
+
+/* 描述列表样式优化 */
+:deep(.el-descriptions__label) {
+  width: 120px;
+  font-weight: bold;
+}
+
+:deep(.el-descriptions__content) {
+  word-break: break-word;
+}
+
+/* 许可证内容样式 */
+.license-content {
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: #f5f5f5;
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.license-content pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: monospace;
+}
+
+/* 标签页样式优化 */
+:deep(.el-tabs__content) {
+  padding: 20px 0;
+}
+
+/* 折叠面板样式优化 */
+:deep(.el-collapse-item__content) {
+  padding: 20px;
+}
+
+:deep(.el-collapse-item__header) {
+  font-size: 16px;
+  font-weight: bold;
 }
 </style>

@@ -5,6 +5,7 @@ import { House, InfoFilled, Connection } from '@element-plus/icons-vue'
 const HomePage = () => import('@/views/HomePage.vue')
 const AboutPage = () => import('@/views/AboutPage.vue')
 
+const Login = () => import('@/views/Login.vue')
 const OllamaTest1 = () => import('@/views/OllamaTest1.vue')
 
 const routes = [
@@ -16,6 +17,16 @@ const routes = [
       showInMenu: true,
       icon: House,
       title: 'Home'
+    }
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: {
+      showInMenu: false,
+      icon: Connection,
+      title: 'Login'
     }
   },
   {
